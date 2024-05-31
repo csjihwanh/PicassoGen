@@ -6,6 +6,7 @@ import logging
 import dotenv
 import cv2
 import numpy as np
+from configs import settings
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -78,8 +79,19 @@ def mask_generation_tool(
 
 class MaskGenerator:
     def __init__(self):
+        
+        self.image_height = settings['image_height']
+        self.image_width = settings['image_width']
+        self.image_size = f'{self.image_width}x{self.image_height}'
+        self.model_name = settings['mask_gen_model']
 
         # LLM configuration
+
+        config_list = autogen.config_list_from_json(
+            env_or_file="configs/OAI_CONFIG_LIST_4.json",
+            filter_dict={"model": [self.model_name]}
+        )
+
         seed = 1
         llm_config = {
             "cache_seed": seed,
@@ -93,7 +105,7 @@ class MaskGenerator:
             name="position_bot",
             system_message=(
                 "You are responsible for determining the positions and sizes of rectangles. Ensure the rectangles do not overlap and are within the image boundaries. "
-                "The image size is 512x512. You must provide the position_list (List[List[int]]) to the position_verifier_bot. "
+                f"The image size is {self.image_size}. You must provide the position_list (List[List[int]]) to the position_verifier_bot. "
                 "Each list item should be formatted as [center_x, center_y, width, height]. Ensure that the bounding boxes do not overlap or go beyond the image boundaries. "
                 "If needed, make reasonable guesses to position the objects naturally within the scene described by the user prompt."
             ),
@@ -104,10 +116,10 @@ class MaskGenerator:
             name="position_verifier_bot",
             system_message=(
                 "You are responsible for verifying the naturalness and correctness of the positions and sizes of the rectangles based on the objects' names and the given positions and sizes. "
-                "The images are of size 512x512. Each bounding box should be in the format of (object name [center_x, center_y, width, height]). "
+                f"The images are of size {self.image_size}. Each bounding box should be in the format of (object name [center_x, center_y, width, height]). "
                 "If the positions and sizes do not match the given prompt naturally, ask the position bot to set the positions again, providing a concrete reason. "
                 "If the positions are good, provide the position_list (List[List[int]]) to the mask_generation_bot. Otherwise, request repositioning from the position_bot. "
-                "Ensure the positions and sizes do not exceed the boundaries of a 512x512 image."
+                f"Ensure the positions and sizes do not exceed the boundaries of a {self.image_size} image."
             ),
             llm_config=self.llm_config
         )
@@ -118,7 +130,7 @@ class MaskGenerator:
                 "You are responsible for generating rectangle masks based on given positions and sizes. "
                 "Use the provided functions to create and return masks as dictionary. The dictionary has \"object_name\", \"num_objects\", \"position_list\", \"masks\" "
                 "If the object name, position, and size do not align naturally, ask the position bot to reassign the position, providing a detailed reason. "
-                "The images are of size 512x512. Each bounding box should be in the format of (object name [center_x, center_y, width, height]). "
+                f"The images are of size {self.image_size}. Each bounding box should be in the format of (object name [center_x, center_y, width, height]). "
                 "Ensure that the bounding boxes do not overlap or go beyond the image boundaries. "
                 "After finishing all the task, save it in json format file using the given method."
                 "Reply TERMINATE when the task is complete."
@@ -158,11 +170,7 @@ class MaskGenerator:
 
 # Example usage
 if __name__ == "__main__":
-    # Load configuration list
-    config_list = autogen.config_list_from_json(
-        env_or_file="../configs/OAI_CONFIG_LIST_4.json",
-        filter_dict={"model": ["gpt-4o"]}
-    )
+    
 
     generator = MaskGenerator()
     prompt = "Draw three balls "
